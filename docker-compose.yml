@@ -1,0 +1,48 @@
+version: '2'
+
+services:
+  datelovestory-client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: datelovestory-client
+    restart: always
+    ports:
+      - '3000:3000'
+    volumes:
+      - ./client/:/client/
+      - /client/node_modules
+    links:
+      - datelovestory-api
+    networks:
+      - datelovestorynetwork
+
+  datelovestory-api:
+    build: ./api
+    container_name: datelovestory-api
+    restart: always
+    ports:
+      - '4000:4000'
+    volumes:
+      - ./api:/api
+      - /api/node_modules
+    depends_on:
+      - mongodb
+    networks:
+      - datelovestorynetwork
+
+  mongodb:
+    image: mongo
+    restart: always
+    container_name: mongodb
+    volumes:
+      - ./data-node:/data/db
+    ports:
+      - 27017:27017
+    command: mongod --noauth
+    networks:
+      - datelovestorynetwork
+
+networks:
+  datelovestorynetwork:
+    driver: bridge
