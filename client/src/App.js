@@ -6,7 +6,7 @@ function App() {
   const [state, setState] = useState({ apiResponse: '' })
 
   useEffect(() => {
-    fetch("http://localhost:4000/testAPI")
+    fetch("http://192.168.99.100:4000/testDB")
         .then(res => res.text())
         .then(res => setState({ apiResponse: res }));
   }, []);
