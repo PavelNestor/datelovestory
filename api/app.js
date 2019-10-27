@@ -1,21 +1,29 @@
+require('dotenv').config(); 
+const logger = require('morgan');
+const mongoose = require('mongoose');
+const passport = require('passport');
+const config = require('./config/database');
+
 var createError = require('http-errors');
 var express = require('express');
 var path = require('path');
 var cookieParser = require('cookie-parser');
-var logger = require('morgan');
 var sassMiddleware = require('node-sass-middleware');
 
-var indexRouter = require('./routes/index');
-var usersRouter = require('./routes/users');
-
+const indexRouter = require('./routes/index');
+const usersRouter = require('./routes/users');
 const testAPIRouter = require('./routes/testAPI');
 const testDBRouter = require("./routes/testDB");
+const api = require("./routes/api");
 const cors = require('cors');
+require('./models/User');
 
 const app = express();
+mongoose.connect(config.database);
 
 app.use(cors());
 app.use("/testDB", testDBRouter);
+app.use(passport.initialize());
 
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
@@ -33,14 +41,19 @@ app.use(sassMiddleware({
 }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// routs
 app.use('/', indexRouter);
 app.use('/users', usersRouter);
 app.use('/testAPI', testAPIRouter);
+app.use('/api', api);
 
 // catch 404 and forward to error handler
 app.use(function (req, res, next) {
   next(createError(404));
 });
+
+// passport session
+app.use(passport.initialize());
 
 // error handler
 app.use(function (err, req, res, next) {
