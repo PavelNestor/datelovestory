@@ -1,56 +1,68 @@
-var createError = require('http-errors');
-var express = require('express');
-var path = require('path');
-var cookieParser = require('cookie-parser');
-var logger = require('morgan');
-var sassMiddleware = require('node-sass-middleware');
-
-var indexRouter = require('./routes/index');
-var usersRouter = require('./routes/users');
-
-const testAPIRouter = require('./routes/testAPI');
-const testDBRouter = require("./routes/testDB");
-const cors = require('cors');
-
+const express = require("express");
 const app = express();
+const users = require("./routes/users");
+const bodyParser = require("body-parser");
+const cookieParser = require("cookie-parser");
+const session = require("express-session");
+const passport = require("passport");
 
-app.use(cors());
-app.use("/testDB", testDBRouter);
+const User = require("./controllers/users");
 
-// view engine setup
-app.set('views', path.join(__dirname, 'views'));
-app.set('view engine', 'pug');
+const path = __dirname + "/views/";
+const port = process.env.PORT || 4000;
+const LocalStrategy = require("passport-local").Strategy;
 
-app.use(logger('dev'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+// Passport init
+app.use(passport.initialize());
+app.use(passport.session());
+passport.use(
+  new LocalStrategy(function(username, password, done) {
+    User.getUserByUsername(username, function(err, user) {
+      if (err) throw err;
+      if (!user) {
+        return done(null, false, { message: "Unknown User" });
+      }
+      User.comparePassword(password, user.password, function(err, isMatch) {
+        if (err) console.log("ERROR: \n", err);
+        if (isMatch) {
+          return done(null, user);
+        } else {
+          return done(null, false, { message: "Invalid password" });
+        }
+      });
+    });
+  })
+);
+
+passport.serializeUser(function(user, done) {
+  done(null, user.id);
+});
+
+passport.deserializeUser(function(id, done) {
+  User.getUserById(id, function(err, user) {
+    done(err, user);
+  });
+});
+
+app.set("view engine", "html");
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static(path));
+app.use("/auth", users);
+
+// BodyParser Middleware
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: false }));
 app.use(cookieParser());
-app.use(sassMiddleware({
-  src: path.join(__dirname, 'public'),
-  dest: path.join(__dirname, 'public'),
-  indentedSyntax: true, // true = .sass and false = .scss
-  sourceMap: true
-}));
-app.use(express.static(path.join(__dirname, 'public')));
 
-app.use('/', indexRouter);
-app.use('/users', usersRouter);
-app.use('/testAPI', testAPIRouter);
+// Express Session
+app.use(
+  session({
+    secret: "secret",
+    saveUninitialized: true,
+    resave: true
+  })
+);
 
-// catch 404 and forward to error handler
-app.use(function (req, res, next) {
-  next(createError(404));
+app.listen(port, function() {
+  console.log(`Example app listening on ${port}!`);
 });
-
-// error handler
-app.use(function (err, req, res, next) {
-  // set locals, only providing error in development
-  res.locals.message = err.message;
-  res.locals.error = req.app.get('env') === 'development' ? err : {};
-
-  // render the error page
-  res.status(err.status || 500);
-  res.render('error');
-});
-
-module.exports = app;
