@@ -1,23 +1,36 @@
-const JwtStrategy = require('passport-jwt').Strategy,
-    ExtractJwt = require('passport-jwt').ExtractJwt;
-
-const User = require('../models/User');
-const config = require('./database');
+const UserShema = require("../models/User");
+var LocalStrategy = require("passport-local").Strategy;
 
 module.exports = function(passport) {
-  let opts = {};
-  opts.jwtFromRequest = ExtractJwt.fromAuthHeaderWithScheme("jwt");
-  opts.secretOrKey = config.secret;
-  passport.use(new JwtStrategy(opts, function(jwt_payload, done) {
-    User.findOne({id: jwt_payload.id}, function(err, user) {
-          if (err) {
-              return done(err, false);
-          }
-          if (user) {
-              done(null, user);
+  passport.use(
+    new LocalStrategy(function(username, password, done) {
+      User.getUserByUsername(username, function(err, user) {
+        if (err) throw err;
+        if (!user) {
+          return done(null, false, { message: "Unknown User" });
+        }
+        UserShema.comparePassword(password, user.password, function(
+          err,
+          isMatch
+        ) {
+          if (err) throw err;
+          if (isMatch) {
+            return done(null, user);
           } else {
-              done(null, false);
+            return done(null, false, { message: "Invalid password" });
           }
+        });
       });
-  }));
+    })
+  );
 };
+
+passport.serializeUser(function(user, done) {
+  done(null, user.id);
+});
+
+passport.deserializeUser(function(id, done) {
+  User.getUserById(id, function(err, user) {
+    done(err, user);
+  });
+});
