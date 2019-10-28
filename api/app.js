@@ -1,69 +1,102 @@
-require('dotenv').config(); 
-const logger = require('morgan');
-const mongoose = require('mongoose');
-const passport = require('passport');
-const config = require('./config/database');
-
-var createError = require('http-errors');
-var express = require('express');
-var path = require('path');
+var express  = require('express');
+var app      = express();
+var port     = process.env.PORT || 3000;
+var bodyParser = require('body-parser');
 var cookieParser = require('cookie-parser');
-var sassMiddleware = require('node-sass-middleware');
+var session = require('express-session');
+var mongoose = require('mongoose');
+var passport = require('passport');
+var User = require('./models/User');
 
-const indexRouter = require('./routes/index');
-const usersRouter = require('./routes/users');
-const testAPIRouter = require('./routes/testAPI');
-const testDBRouter = require("./routes/testDB");
-const api = require("./routes/api");
-const cors = require('cors');
-require('./models/User');
+// Conenct to DB
+mongoose.connect('mongodb://localhost/loginapp');
+var db = mongoose.connection;
 
-const app = express();
-mongoose.connect(config.database);
-
-app.use(cors());
-app.use("/testDB", testDBRouter);
-app.use(passport.initialize());
-
-// view engine setup
-app.set('views', path.join(__dirname, 'views'));
-app.set('view engine', 'pug');
-
-app.use(logger('dev'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+// BodyParser Middleware
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: false }));
 app.use(cookieParser());
-app.use(sassMiddleware({
-  src: path.join(__dirname, 'public'),
-  dest: path.join(__dirname, 'public'),
-  indentedSyntax: true, // true = .sass and false = .scss
-  sourceMap: true
+
+// Express Session
+app.use(session({
+  secret: 'secret',
+  saveUninitialized: true,
+  resave: true
 }));
-app.use(express.static(path.join(__dirname, 'public')));
 
-// routs
-app.use('/', indexRouter);
-app.use('/users', usersRouter);
-app.use('/testAPI', testAPIRouter);
-app.use('/api', api);
-
-// catch 404 and forward to error handler
-app.use(function (req, res, next) {
-  next(createError(404));
-});
-
-// passport session
+// Passport init
 app.use(passport.initialize());
+app.use(passport.session());
+// Register User
+app.post('/register', function(req, res){
+  var password = req.body.password;
+  var password2 = req.body.password2;
 
-// error handler
-app.use(function (err, req, res, next) {
-  // set locals, only providing error in development
-  res.locals.message = err.message;
-  res.locals.error = req.app.get('env') === 'development' ? err : {};
+  if (password == password2){
+    var newUser = new User({
+      name: req.body.name,
+      email: req.body.email,
+      username: req.body.username,
+      password: req.body.password
+    });
 
-  // render the error page
-  res.status(err.status || 500);
-  res.render('error');
+    User.createUser(newUser, function(err, user){
+      if(err) throw err;
+      res.send(user).end()
+    });
+  } else{
+    res.status(500).send("{errors: \"Passwords don't match\"}").end()
+  }
 });
 
-module.exports = app;
+var LocalStrategy = require('passport-local').Strategy;
+passport.use(new LocalStrategy(
+  function(username, password, done) {
+    User.getUserByUsername(username, function(err, user){
+      if(err) throw err;
+      if(!user){
+        return done(null, false, {message: 'Unknown User'});
+      }
+      User.comparePassword(password, user.password, function(err, isMatch){
+        if(err) throw err;
+     	if(isMatch){
+     	  return done(null, user);
+     	} else {
+     	  return done(null, false, {message: 'Invalid password'});
+     	}
+     });
+   });
+  }
+));
+
+passport.serializeUser(function(user, done) {
+  done(null, user.id);
+});
+
+passport.deserializeUser(function(id, done) {
+  User.getUserById(id, function(err, user) {
+    done(err, user);
+  });
+});
+
+// Endpoint to login
+app.post('/login',
+  passport.authenticate('local'),
+  function(req, res) {
+    res.send(req.user);
+  }
+);
+
+// Endpoint to get current user
+app.get('/user', function(req, res){
+  res.send(req.user);
+})
+
+
+// Endpoint to logout
+app.get('/logout', function(req, res){
+  req.logout();
+  res.send(null)
+});
+
+app.listen(4000, () => console.log('App listening on port 4000!'));
